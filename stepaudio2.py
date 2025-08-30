@@ -164,4 +164,79 @@ class StepAudio2(StepAudio2Base):
         # print(results)
         return results, mels
 
-# ... (the __main__ block for testing remains the same)
+if __name__ == '__main__':
+    from token2wav import Token2wav
+
+    model = StepAudio2('Step-Audio-2-mini')
+    token2wav = Token2wav('Step-Audio-2-mini/token2wav')
+
+    # Text-to-text conversation
+    print()
+    messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "human", "content": "Give me a brief introduction to the Great Wall."},
+            {"role": "assistant", "content": None}
+    ]
+    tokens, text, _ = model(messages, max_new_tokens=256, temperature=0.7, repetition_penalty=1.05, top_p=0.9, do_sample=True)
+    print(text)
+
+    # Text-to-speech conversation
+    print()
+    messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "human", "content": "Give me a brief introduction to the Great Wall."},
+            {"role": "assistant", "content": "<tts_start>", "eot": False}, # Insert <tts_start> for speech response
+    ]
+    tokens, text, audio = model(messages, max_new_tokens=4096, temperature=0.7, repetition_penalty=1.05, top_p=0.9, do_sample=True)
+    print(text)
+    print(tokens)
+    audio = token2wav(audio, prompt_wav='assets/default_male.wav')
+    with open('output-male.wav', 'wb') as f:
+        f.write(audio)
+
+    # Speech-to-text conversation
+    print()
+    messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "human", "content": [{"type": "audio", "audio": "assets/give_me_a_brief_introduction_to_the_great_wall.wav"}]},
+            {"role": "assistant", "content": None}
+    ]
+    tokens, text, _ = model(messages, max_new_tokens=256, temperature=0.7, repetition_penalty=1.05, top_p=0.9, do_sample=True)
+    print(text)
+
+    # Speech-to-speech conversation
+    print()
+    messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "human", "content": [{"type": "audio", "audio": "assets/give_me_a_brief_introduction_to_the_great_wall.wav"}]},
+            {"role": "assistant", "content": "<tts_start>", "eot": False}, # Insert <tts_start> for speech response
+    ]
+    tokens, text, audio = model(messages, max_new_tokens=4096, temperature=0.7, repetition_penalty=1.05, top_p=0.9, do_sample=True)
+    print(text)
+    print(tokens)
+    audio = token2wav(audio, prompt_wav='assets/default_female.wav')
+    with open('output-female.wav', 'wb') as f:
+        f.write(audio)
+
+    # Multi-turn conversation
+    print()
+    messages.pop(-1)
+    messages += [
+            {"role": "assistant", "content": [{"type": "text", "text": "<tts_start>"},
+                                              {"type": "token", "token": tokens}]},
+            {"role": "human", "content": "Now write a 4-line poem about it."},
+            {"role": "assistant", "content": None}
+    ]
+    tokens, text, audio = model(messages, max_new_tokens=256, temperature=0.7, repetition_penalty=1.05, top_p=0.9, do_sample=True)
+    print(text)
+
+    # Multi-modal inputs
+    print()
+    messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "human", "content": [{"type": "text", "text": "Translate the speech into Chinese."},
+                                          {"type": "audio", "audio": "assets/give_me_a_brief_introduction_to_the_great_wall.wav"}]},
+            {"role": "assistant", "content": None}
+    ]
+    tokens, text, audio = model(messages, max_new_tokens=256, temperature=0.7, repetition_penalty=1.05, top_p=0.9, do_sample=True)
+    print(text)
