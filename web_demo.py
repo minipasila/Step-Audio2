@@ -124,9 +124,8 @@ if __name__ == "__main__":
     from token2wav import Token2wav
 
     parser = ArgumentParser()
+    # Changed default to the Hugging Face Hub model ID
     parser.add_argument("--model-path", type=str, default='stepfun-ai/Step-Audio-2-mini', help="Model path on Hugging Face Hub or local directory.")
-    # --- New Argument for Quantization ---
-    parser.add_argument("--quantization-bit", type=int, choices=[4, 8], default=None, help="Quantization bit (4 or 8) to reduce memory usage. Requires bitsandbytes.")
     parser.add_argument(
         "--server-port", type=int, default=7860, help="Demo server port."
     )
@@ -142,12 +141,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
     os.environ["GRADIO_TEMP_DIR"] = args.cache_dir
 
+    # Download the model from the Hub. If it's a local path, it will use it directly.
+    # This ensures all necessary files are in one place for Token2wav.
     print(f"Loading model from {args.model_path}...")
     local_model_path = snapshot_download(repo_id=args.model_path,
                                          allow_patterns=["*.json", "*.py", "*.safetensors", "*.model", "*.pt", "*.onnx", "*.yaml"])
     print(f"Model downloaded to local path: {local_model_path}")
 
-    # Pass the quantization argument to the model loader
-    audio_model = StepAudio2(local_model_path, quantization_bit=args.quantization_bit)
+
+    audio_model = StepAudio2(local_model_path)
     token2wav = Token2wav(f"{local_model_path}/token2wav")
     _launch_demo(args, audio_model, token2wav)
