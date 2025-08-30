@@ -63,16 +63,19 @@ Step-Audio 2 is an end-to-end multi-modal large language model designed for indu
 ```bash
 conda create -n stepaudio2 python=3.10
 conda activate stepaudio2
-pip install transformers==4.49.0 torchaudio librosa onnxruntime s3tokenizer diffusers hyperpyyaml
+# Added huggingface-hub to dependencies
+pip install transformers==4.49.0 torchaudio librosa onnxruntime s3tokenizer diffusers hyperpyyaml huggingface-hub
 
+# Clone the repository for the scripts
 git clone https://github.com/stepfun-ai/Step-Audio2.git
 cd Step-Audio2
-git lfs install
-git clone https://huggingface.co/stepfun-ai/Step-Audio-2-mini
-# git clone https://huggingface.co/stepfun-ai/Step-Audio-2-mini-Base
+
+# The model will be downloaded automatically on the first run, so manual cloning is no longer needed.
 ```
 
 ### 🚀 Inference Scripts
+
+On the first run, the model weights will be automatically downloaded from the Hugging Face Hub and cached.
 
 ```bash
 python examples.py
