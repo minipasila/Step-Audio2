@@ -1,24 +1,12 @@
-import sys
 import torch
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, GenerationConfig, BitsAndBytesConfig
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, GenerationConfig
 
 from utils import compute_token_num, load_audio, log_mel_spectrogram, padding_mels
 
 
 class StepAudio2Base:
 
-    def __init__(self, model_path: str, quantization_bit: int = None):
-        # --- NEW FIX: Dynamically import custom model code ---
-        # Add the model's local path to sys.path so we can import its custom python files.
-        # This is necessary to monkey-patch the class before loading the model.
-        sys.path.insert(0, model_path)
-        from modeling_qwen2_audio import StepAudio2ForCausalLM
-        # Now that the class is imported, add the attribute required for `device_map='auto'`.
-        StepAudio2ForCausalLM._no_split_modules = ["Qwen2DecoderLayer"]
-        # It's good practice to clean up sys.path afterwards.
-        sys.path.pop(0)
-        # --- END FIX ---
-
+    def __init__(self, model_path: str):
         # Load config and add model_type if missing to prevent ValueError
         config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
         if not hasattr(config, "model_type"):
@@ -27,34 +15,9 @@ class StepAudio2Base:
         self.llm_tokenizer = AutoTokenizer.from_pretrained(
             model_path, trust_remote_code=True, padding_side="right", config=config
         )
-
-        quantization_config = None
-        if quantization_bit == 4:
-            print("Loading model in 4-bit quantization...")
-            quantization_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch.bfloat16,
-                bnb_4bit_quant_type="nf4",
-                bnb_4bit_use_double_quant=True,
-            )
-        elif quantization_bit == 8:
-            print("Loading model in 8-bit quantization...")
-            quantization_config = BitsAndBytesConfig(load_in_8bit=True)
-
-        if quantization_config:
-            self.llm = AutoModelForCausalLM.from_pretrained(
-                model_path,
-                trust_remote_code=True,
-                config=config,
-                quantization_config=quantization_config,
-                device_map="auto"
-            )
-        else:
-            print("Loading model in bfloat16...")
-            self.llm = AutoModelForCausalLM.from_pretrained(
-                model_path, trust_remote_code=True, torch_dtype=torch.bfloat16, config=config
-            ).cuda()
-
+        self.llm = AutoModelForCausalLM.from_pretrained(
+            model_path, trust_remote_code=True, torch_dtype=torch.bfloat16, config=config
+        ).cuda()
         self.eos_token_id = self.llm_tokenizer.eos_token_id
 
     def __call__(self, messages: list, **kwargs):
@@ -69,16 +32,18 @@ class StepAudio2Base:
                 prompt_ids.append(torch.tensor([msg], dtype=torch.int32))
             else:
                 raise ValueError(f"Unsupported content type: {type(msg)}")
-        prompt_ids = torch.cat(prompt_ids, dim=-1).to(self.llm.device) # Ensure tensors are on the correct device
+        prompt_ids = torch.cat(prompt_ids, dim=-1).cuda()
         attention_mask = torch.ones_like(prompt_ids)
 
+        #mels = None if len(mels) == 0 else torch.stack(mels).cuda()
+        #mel_lengths = None if mels is None else torch.tensor([mel.shape[1] - 2 for mel in mels], dtype=torch.int32, device='cuda')
         if len(mels)==0:
             mels = None
             mel_lengths = None
         else:
             mels, mel_lengths = padding_mels(mels)
-            mels = mels.to(self.llm.device) # Ensure tensors are on the correct device
-            mel_lengths = mel_lengths.to(self.llm.device) # Ensure tensors are on the correct device
+            mels = mels.cuda()
+            mel_lengths = mel_lengths.cuda()
 
         generate_inputs = {
             "input_ids": prompt_ids,
@@ -129,9 +94,8 @@ class StepAudio2Base:
 
 class StepAudio2(StepAudio2Base):
 
-    def __init__(self, model_path: str, quantization_bit: int = None):
-        # Pass the quantization bit to the parent class
-        super().__init__(model_path, quantization_bit=quantization_bit)
+    def __init__(self, model_path: str):
+        super().__init__(model_path)
         self.llm_tokenizer.eos_token = "<|EOT|>"
         self.llm.config.eos_token_id = self.llm_tokenizer.convert_tokens_to_ids("<|EOT|>")
         self.eos_token_id = self.llm_tokenizer.convert_tokens_to_ids("<|EOT|>")
