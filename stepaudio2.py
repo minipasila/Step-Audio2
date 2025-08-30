@@ -1,6 +1,14 @@
 import torch
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, GenerationConfig, BitsAndBytesConfig
 
+# --- FIX ---
+# Since the model uses custom code (trust_remote_code=True), we must manually
+# tell transformers which modules should not be split across devices.
+# The model is based on Qwen2, so we use its decoder layer name.
+from transformers.models.qwen2_audio.modeling_qwen2_audio import StepAudio2ForCausalLM
+StepAudio2ForCausalLM._no_split_modules = ["Qwen2DecoderLayer"]
+# --- END FIX ---
+
 from utils import compute_token_num, load_audio, log_mel_spectrogram, padding_mels
 
 
@@ -16,7 +24,7 @@ class StepAudio2Base:
             model_path, trust_remote_code=True, padding_side="right", config=config
         )
 
-        # --- Quantization Logic ---
+        quantization_config = None
         if quantization_bit == 4:
             print("Loading model in 4-bit quantization...")
             quantization_config = BitsAndBytesConfig(
@@ -25,28 +33,24 @@ class StepAudio2Base:
                 bnb_4bit_quant_type="nf4",
                 bnb_4bit_use_double_quant=True,
             )
+        elif quantization_bit == 8:
+            print("Loading model in 8-bit quantization...")
+            # Use BitsAndBytesConfig for 8-bit to address deprecation warning
+            quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+
+        if quantization_config:
             self.llm = AutoModelForCausalLM.from_pretrained(
                 model_path,
                 trust_remote_code=True,
                 config=config,
                 quantization_config=quantization_config,
-                device_map="auto" # device_map is required for quantization
-            )
-        elif quantization_bit == 8:
-            print("Loading model in 8-bit quantization...")
-            self.llm = AutoModelForCausalLM.from_pretrained(
-                model_path,
-                trust_remote_code=True,
-                config=config,
-                load_in_8bit=True,
-                device_map="auto" # device_map is required for quantization
+                device_map="auto"
             )
         else:
             print("Loading model in bfloat16...")
             self.llm = AutoModelForCausalLM.from_pretrained(
                 model_path, trust_remote_code=True, torch_dtype=torch.bfloat16, config=config
             ).cuda()
-        # --- End Quantization Logic ---
 
         self.eos_token_id = self.llm_tokenizer.eos_token_id
 
