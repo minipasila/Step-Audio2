@@ -1,13 +1,6 @@
+import sys
 import torch
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, GenerationConfig, BitsAndBytesConfig
-
-# --- FIX ---
-# Since the model uses custom code (trust_remote_code=True), we must manually
-# tell transformers which modules should not be split across devices.
-# The model is based on Qwen2, so we use its decoder layer name.
-from transformers.models.qwen2_audio.modeling_qwen2_audio import StepAudio2ForCausalLM
-StepAudio2ForCausalLM._no_split_modules = ["Qwen2DecoderLayer"]
-# --- END FIX ---
 
 from utils import compute_token_num, load_audio, log_mel_spectrogram, padding_mels
 
@@ -15,6 +8,17 @@ from utils import compute_token_num, load_audio, log_mel_spectrogram, padding_me
 class StepAudio2Base:
 
     def __init__(self, model_path: str, quantization_bit: int = None):
+        # --- NEW FIX: Dynamically import custom model code ---
+        # Add the model's local path to sys.path so we can import its custom python files.
+        # This is necessary to monkey-patch the class before loading the model.
+        sys.path.insert(0, model_path)
+        from modeling_qwen2_audio import StepAudio2ForCausalLM
+        # Now that the class is imported, add the attribute required for `device_map='auto'`.
+        StepAudio2ForCausalLM._no_split_modules = ["Qwen2DecoderLayer"]
+        # It's good practice to clean up sys.path afterwards.
+        sys.path.pop(0)
+        # --- END FIX ---
+
         # Load config and add model_type if missing to prevent ValueError
         config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
         if not hasattr(config, "model_type"):
@@ -35,7 +39,6 @@ class StepAudio2Base:
             )
         elif quantization_bit == 8:
             print("Loading model in 8-bit quantization...")
-            # Use BitsAndBytesConfig for 8-bit to address deprecation warning
             quantization_config = BitsAndBytesConfig(load_in_8bit=True)
 
         if quantization_config:
