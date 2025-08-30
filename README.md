@@ -63,34 +63,32 @@ Step-Audio 2 is an end-to-end multi-modal large language model designed for indu
 ```bash
 conda create -n stepaudio2 python=3.10
 conda activate stepaudio2
-# Added bitsandbytes and accelerate for quantization
-pip install transformers==4.49.0 torchaudio librosa onnxruntime s3tokenizer diffusers hyperpyyaml huggingface-hub bitsandbytes accelerate
+# Added huggingface-hub to dependencies
+pip install transformers==4.49.0 torchaudio librosa onnxruntime s3tokenizer diffusers hyperpyyaml huggingface-hub
 
 # Clone the repository for the scripts
 git clone https://github.com/stepfun-ai/Step-Audio2.git
 cd Step-Audio2
+
+# The model will be downloaded automatically on the first run, so manual cloning is no longer needed.
 ```
 
-### 🚀 Local web demonstration
+### 🚀 Inference Scripts
 
 On the first run, the model weights will be automatically downloaded from the Hugging Face Hub and cached.
-
-```bash
-pip install gradio
-# Run with default bfloat16 precision
-python web_demo.py
-
-# To save memory, run with 8-bit quantization
-python web_demo.py --quantization-bit 8
-
-# For even lower memory usage, run with 4-bit quantization (recommended for <16GB VRAM)
-python web_demo.py --quantization-bit 4
-```
 
 ```bash
 python examples.py
 # python examples-base.py
 ```
+
+### 🚀 Local web demonstration
+
+```bash
+pip install gradio
+python web_demo.py
+```
+
 
 ## Online demonstration
 
